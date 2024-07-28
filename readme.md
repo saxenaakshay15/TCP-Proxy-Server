@@ -1,103 +1,60 @@
-# TCP Proxy Server
+## TCP Proxy Server
 
-## Description
+This project implements a TCP Proxy Server in C++ using the epoll mechanism and a thread pool for efficient connection handling. The proxy server listens for incoming connections on a specified local IP and port, then forwards the traffic to a specified remote IP and port.
 
-The TCP Proxy Server is a simple utility that proxies (tunnels or redirects) connections from external clients to a specific server. It is designed to:
+### Features
+- Non-blocking I/O using `epoll`
+- Multi-threaded handling of client connections with a thread pool
+- Simple implementation without third-party networking libraries
 
-- Limit the number of client connections to the server.
-- Load balance client connections between multiple server instances.
-- Provide IP or connection time-based filtering and access control mechanisms.
-- Inspect (log), filter, or otherwise modify data flowing between the clients and the server.
+### Technologies Used
+- C++
+- epoll
+- threadpool
+- pthreads
 
-## Features
+### Project Structure
+- `proxy_server.cpp`: Main implementation of the TCP Proxy Server
+- `Makefile`: Script to compile the C++ code
+- `server.py`: Simple Python server script for testing
+- `client.py`: Simple Python client script for testing
 
-- Connection limiting
-- Load balancing
-- Filtering and access control
-- Data inspection and modification
+### Compilation and Execution
 
-## Compatibility
-
-The C++ TCP Proxy Server implementation is compatible with the following C++ compilers:
-
-- GNU Compiler Collection (GCC)
-- Intel® C++ Compiler
-- Clang/LLVM
-- PGI C++ Compiler
-- Microsoft Visual Studio C++ Compiler
-- IBM XL C/C++ Compiler
-
-## Internals of the Proxy
-
-The proxy implementation consists of three main components:
-
-1. **Acceptor**: Sets up the proxy, binds to the given IP and port, and listens for incoming connections.
-2. **Bridge**: Handles the actual data transfer between the client and the remote server.
-3. **I/O Service**: Manages asynchronous I/O operations.
-
-## Building and Running the Project on Linux
-
-### Prerequisites
-
-- GCC or any other compatible C++ compiler
+#### Requirements
+- g++ compiler
+- make
 - Python 3
 
-### Steps
-
-1. **Clone the Repository**:
-   ```bash
-   git clone <repository-url>
-   cd <repository-directory>
-   ```
-
-2. **Build the Project**:
-   Use the provided Makefile to compile the proxy server.
-   ```bash
+#### Compilation
+1. Compile the proxy server using make:
+   ```sh
    make
    ```
 
-3. **Run the Python Server**:
-   Open a terminal and navigate to the project directory, then start the Python server.
-   ```bash
-   python3 server.py
-   ```
+#### Running the TCP Proxy Server
+1. Ensure you have compiled the `proxy_server` executable.
 
-4. **Run the Proxy Server**:
-   In another terminal, navigate to the project directory, then run the compiled proxy server.
-   ```bash
+2. Open a terminal and start the TCP Proxy Server with the following command:
+   ```sh
+   ./proxy_server <local_ip> <local_port> <remote_ip> <remote_port>
+   ```
+   Example:
+   ```sh
    ./proxy_server 127.0.0.1 8080 127.0.0.1 9090
    ```
 
-5. **Test the Proxy Server**:
-   Open another terminal, navigate to the project directory, then run the Python client.
-   ```bash
+#### Running the Test Server and Client
+1. Open a new terminal and navigate to the project directory. Start the Python test server:
+   ```sh
+   python3 server.py
+   ```
+
+2. Open another terminal and navigate to the project directory. Start the Python test client:
+   ```sh
    python3 client.py
    ```
 
-   You can now send messages through the client, which will be proxied to the server.
+The client will connect to the proxy server, which in turn will forward the traffic to the test server.
 
-## Files
 
-### `proxy_server.cpp`
-
-The main C++ file containing the implementation of the TCP proxy server.
-
-### `Makefile`
-
-The Makefile to build the proxy server.
-
-### `server.py`
-
-A simple Python server script to test the proxy server.
-
-### `client.py`
-
-A simple Python client script to test the proxy server.
-
-### `.vscode/c_cpp_properties.json`
-
-VS Code configuration for IntelliSense and other C++ features.
-
-### `.vscode/tasks.json`
-
-VS Code tasks for building and cleaning the project.
