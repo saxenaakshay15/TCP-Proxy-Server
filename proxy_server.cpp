@@ -1,147 +1,131 @@
 #include <iostream>
-#include <string>
 #include <thread>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#pragma comment(lib, "ws2_32.lib")
+#include <vector>
+#include <cstring>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 class Bridge {
 public:
-    Bridge(SOCKET clientSocket, SOCKET serverSocket)
-        : clientSocket_(clientSocket), serverSocket_(serverSocket) {}
+    Bridge(int client_socket, const std::string& upstream_host, unsigned short upstream_port)
+        : client_socket_(client_socket), upstream_host_(upstream_host), upstream_port_(upstream_port) {}
 
-    void Start() {
-        std::thread clientToServerThread(&Bridge::ForwardClientToServer, this);
-        std::thread serverToClientThread(&Bridge::ForwardServerToClient, this);
+    void start() {
+        upstream_socket_ = socket(AF_INET, SOCK_STREAM, 0);
+        if (upstream_socket_ < 0) {
+            std::cerr << "Failed to create upstream socket." << std::endl;
+            close(client_socket_);
+            return;
+        }
 
-        clientToServerThread.join();
-        serverToClientThread.join();
+        sockaddr_in server_addr;
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_port = htons(upstream_port_);
+        inet_pton(AF_INET, upstream_host_.c_str(), &server_addr.sin_addr);
+
+        if (connect(upstream_socket_, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+            std::cerr << "Failed to connect to upstream server." << std::endl;
+            close(client_socket_);
+            close(upstream_socket_);
+            return;
+        }
+
+        std::thread([this] { this->handleClientToServer(); }).detach();
+        std::thread([this] { this->handleServerToClient(); }).detach();
     }
 
 private:
-    void ForwardClientToServer() {
+    void handleClientToServer() {
         char buffer[8192];
-        int bytesReceived;
-
-        while ((bytesReceived = recv(clientSocket_, buffer, sizeof(buffer), 0)) > 0) {
-            send(serverSocket_, buffer, bytesReceived, 0);
+        ssize_t bytes_read;
+        while ((bytes_read = read(client_socket_, buffer, sizeof(buffer))) > 0) {
+            write(upstream_socket_, buffer, bytes_read);
         }
-
-        Close();
+        close(upstream_socket_);
     }
 
-    void ForwardServerToClient() {
+    void handleServerToClient() {
         char buffer[8192];
-        int bytesReceived;
-
-        while ((bytesReceived = recv(serverSocket_, buffer, sizeof(buffer), 0)) > 0) {
-            send(clientSocket_, buffer, bytesReceived, 0);
+        ssize_t bytes_read;
+        while ((bytes_read = read(upstream_socket_, buffer, sizeof(buffer))) > 0) {
+            write(client_socket_, buffer, bytes_read);
         }
-
-        Close();
+        close(client_socket_);
     }
 
-    void Close() {
-        closesocket(clientSocket_);
-        closesocket(serverSocket_);
-    }
-
-    SOCKET clientSocket_;
-    SOCKET serverSocket_;
+    int client_socket_;
+    int upstream_socket_;
+    std::string upstream_host_;
+    unsigned short upstream_port_;
 };
 
 class Acceptor {
 public:
-    Acceptor(const std::string& localHost, unsigned short localPort,
-             const std::string& remoteHost, unsigned short remotePort)
-        : localPort_(localPort), remotePort_(remotePort) {
-        WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            throw std::runtime_error("WSAStartup failed");
+    Acceptor(const std::string& local_host, unsigned short local_port, const std::string& upstream_host, unsigned short upstream_port)
+        : local_host_(local_host), local_port_(local_port), upstream_host_(upstream_host), upstream_port_(upstream_port) {}
+
+    bool start() {
+        int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_socket < 0) {
+            std::cerr << "Failed to create server socket." << std::endl;
+            return false;
         }
 
-        localSocket_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (localSocket_ == INVALID_SOCKET) {
-            throw std::runtime_error("Socket creation failed");
+        sockaddr_in local_addr;
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_port = htons(local_port_);
+        inet_pton(AF_INET, local_host_.c_str(), &local_addr.sin_addr);
+
+        if (bind(server_socket, (sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
+            std::cerr << "Failed to bind to local address." << std::endl;
+            close(server_socket);
+            return false;
         }
 
-        sockaddr_in localAddr;
-        localAddr.sin_family = AF_INET;
-        localAddr.sin_addr.s_addr = inet_addr(localHost.c_str());
-        localAddr.sin_port = htons(localPort);
-
-        if (bind(localSocket_, (sockaddr*)&localAddr, sizeof(localAddr)) == SOCKET_ERROR) {
-            throw std::runtime_error("Bind failed");
+        if (listen(server_socket, 10) < 0) {
+            std::cerr << "Failed to listen on socket." << std::endl;
+            close(server_socket);
+            return false;
         }
 
-        if (listen(localSocket_, SOMAXCONN) == SOCKET_ERROR) {
-            throw std::runtime_error("Listen failed");
-        }
-
-        remoteHost_ = remoteHost;
-    }
-
-    ~Acceptor() {
-        closesocket(localSocket_);
-        WSACleanup();
-    }
-
-    void AcceptConnections() {
         while (true) {
-            SOCKET clientSocket = accept(localSocket_, nullptr, nullptr);
-            if (clientSocket == INVALID_SOCKET) {
-                std::cerr << "Accept failed" << std::endl;
-                continue;
+            sockaddr_in client_addr;
+            socklen_t client_len = sizeof(client_addr);
+            int client_socket = accept(server_socket, (sockaddr*)&client_addr, &client_len);
+            if (client_socket >= 0) {
+                Bridge* bridge = new Bridge(client_socket, upstream_host_, upstream_port_);
+                bridge->start();
             }
-
-            SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-            if (serverSocket == INVALID_SOCKET) {
-                std::cerr << "Socket creation failed" << std::endl;
-                closesocket(clientSocket);
-                continue;
-            }
-
-            sockaddr_in serverAddr;
-            serverAddr.sin_family = AF_INET;
-            serverAddr.sin_addr.s_addr = inet_addr(remoteHost_.c_str());
-            serverAddr.sin_port = htons(remotePort_);
-
-            if (connect(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-                std::cerr << "Connect failed" << std::endl;
-                closesocket(clientSocket);
-                closesocket(serverSocket);
-                continue;
-            }
-
-            Bridge bridge(clientSocket, serverSocket);
-            bridge.Start();
         }
+
+        close(server_socket);
+        return true;
     }
 
 private:
-    SOCKET localSocket_;
-    unsigned short localPort_;
-    unsigned short remotePort_;
-    std::string remoteHost_;
+    std::string local_host_;
+    unsigned short local_port_;
+    std::string upstream_host_;
+    unsigned short upstream_port_;
 };
 
 int main(int argc, char* argv[]) {
     if (argc != 5) {
-        std::cerr << "Usage: proxy_server <local_host_ip> <local_port> <forward_host_ip> <forward_port>" << std::endl;
+        std::cerr << "Usage: tcpproxy_server <local host ip> <local port> <forward host ip> <forward port>" << std::endl;
         return 1;
     }
 
-    const std::string localHost = argv[1];
-    const unsigned short localPort = static_cast<unsigned short>(std::atoi(argv[2]));
-    const std::string remoteHost = argv[3];
-    const unsigned short remotePort = static_cast<unsigned short>(std::atoi(argv[4]));
+    const unsigned short local_port = static_cast<unsigned short>(::atoi(argv[2]));
+    const unsigned short forward_port = static_cast<unsigned short>(::atoi(argv[4]));
+    const std::string local_host = argv[1];
+    const std::string forward_host = argv[3];
 
-    try {
-        Acceptor acceptor(localHost, localPort, remoteHost, remotePort);
-        acceptor.AcceptConnections();
-    } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+    Acceptor acceptor(local_host, local_port, forward_host, forward_port);
+    if (!acceptor.start()) {
+        std::cerr << "Failed to start TCP proxy server." << std::endl;
         return 1;
     }
 

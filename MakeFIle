@@ -1,26 +1,16 @@
-# Makefile for TCP Proxy Server using MSVC on Windows
+# Makefile for TCP Proxy Server
 
-# The name of the executable
-TARGET = proxy_server
+CXX = g++
+CXXFLAGS = -Wall -Wextra -pedantic -O3
+LDFLAGS = -lpthread
 
-# Source files
-SRCS = proxy_server.cpp
+TARGET = tcpproxy_server
+SRCS = tcpproxy_server.cpp
 
-# Compiler and flags
-CXX = cl
-CXXFLAGS = /EHsc /O2 /MD
-
-# Linker and libraries
-LINKER = link
-LDFLAGS = /SUBSYSTEM:CONSOLE
-
-# Rules
 all: $(TARGET)
 
 $(TARGET): $(SRCS)
-    $(CXX) $(CXXFLAGS) $(SRCS) /link $(LDFLAGS)
+    $(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
 
 clean:
-    del /Q $(TARGET).exe
-
-.PHONY: all clean
+    rm -f $(TARGET)
