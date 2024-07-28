@@ -1,19 +1,19 @@
 import socket
 
-def main():
-    host = '127.0.0.1'
-    port = 8080
+def start_client(host, port):
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.connect((host, port))
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((host, port))
-
-    message = "Hello, Proxy Server!"
-    client_socket.sendall(message.encode())
-
-    response = client_socket.recv(1024)
-    print(f"Received from server: {response.decode()}")
-
-    client_socket.close()
+    try:
+        while True:
+            message = input("Enter message to send: ")
+            if message.lower() == 'exit':
+                break
+            client_sock.sendall(message.encode())
+            data = client_sock.recv(1024)
+            print(f"Received: {data.decode()}")
+    finally:
+        client_sock.close()
 
 if __name__ == "__main__":
-    main()
+    start_client('127.0.0.1', 8080)

@@ -1,26 +1,21 @@
 import socket
 
-def main():
-    host = '127.0.0.1'
-    port = 12345
-
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((host, port))
-    server_socket.listen(1)
-
+def start_server(host, port):
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.bind((host, port))
+    server_sock.listen(5)
     print(f"Server listening on {host}:{port}")
 
-    conn, addr = server_socket.accept()
-    print(f"Connection from {addr}")
-
     while True:
-        data = conn.recv(1024)
-        if not data:
-            break
-        print(f"Received: {data.decode()}")
-        conn.sendall(data)  # Echo the data back to the client
-
-    conn.close()
+        client_sock, addr = server_sock.accept()
+        print(f"Connection from {addr}")
+        while True:
+            data = client_sock.recv(1024)
+            if not data:
+                break
+            print(f"Received: {data.decode()}")
+            client_sock.sendall(data)
+        client_sock.close()
 
 if __name__ == "__main__":
-    main()
+    start_server('127.0.0.1', 9090)

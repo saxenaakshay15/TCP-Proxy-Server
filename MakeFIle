@@ -1,16 +1,10 @@
-# Makefile for TCP Proxy Server
+CC = g++
+CFLAGS = -Wall -Wextra -O2
 
-CXX = g++
-CXXFLAGS = -Wall -Wextra -pedantic -O3
-LDFLAGS = -lpthread
+all: proxy_server
 
-TARGET = tcpproxy_server
-SRCS = tcpproxy_server.cpp
-
-all: $(TARGET)
-
-$(TARGET): $(SRCS)
-    $(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
+proxy_server: proxy_server.cpp
+	$(CC) $(CFLAGS) -o proxy_server proxy_server.cpp -lpthread
 
 clean:
-    rm -f $(TARGET)
+	rm -f proxy_server
